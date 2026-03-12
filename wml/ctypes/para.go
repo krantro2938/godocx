@@ -8,7 +8,7 @@ import (
 )
 
 type Paragraph struct {
-	id string
+	Id string
 
 	// Attributes
 	RsidRPr      *stypes.LongHexNum // Revision Identifier for Paragraph Glyph Formatting
@@ -34,6 +34,73 @@ type Hyperlink struct {
 	ID       string   `xml:"http://schemas.openxmlformats.org/officeDocument/2006/relationships id,attr"`
 	Run      *Run
 	Children []ParagraphChild
+}
+
+func (h *Hyperlink) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "id":
+			h.ID = attr.Value
+		case "tooltip":
+		case "history":
+		}
+	}
+
+loop:
+	for {
+		currentToken, err := d.Token()
+		if err != nil {
+			return err
+		}
+
+		switch elem := currentToken.(type) {
+		case xml.StartElement:
+			switch elem.Name.Local {
+			case "r":
+				r := NewRun()
+				if err = d.DecodeElement(r, &elem); err != nil {
+					return err
+				}
+				h.Children = append(h.Children, ParagraphChild{Run: r})
+			case "rPr":
+			default:
+				if err = d.Skip(); err != nil {
+					return err
+				}
+			}
+		case xml.EndElement:
+			break loop
+		}
+	}
+
+	return nil
+}
+
+func (h Hyperlink) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) {
+	start.Name.Local = "w:hyperlink"
+
+	if h.ID != "" {
+		start.Attr = append(start.Attr, xml.Attr{
+			Name:  xml.Name{Local: "r:id"},
+			Value: h.ID,
+		})
+	}
+
+	if err = e.EncodeToken(start); err != nil {
+		return err
+	}
+
+	for _, child := range h.Children {
+		if child.Run != nil {
+			if err = child.Run.MarshalXML(e, xml.StartElement{
+				Name: xml.Name{Local: "w:r"},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	return e.EncodeToken(start.End())
 }
 
 func (p Paragraph) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) {
@@ -122,13 +189,18 @@ loop:
 				if err = d.DecodeElement(r, &elem); err != nil {
 					return err
 				}
-
 				p.Children = append(p.Children, ParagraphChild{Run: r})
 			case "pPr":
 				p.Property = &ParagraphProp{}
 				if err = d.DecodeElement(p.Property, &elem); err != nil {
 					return err
 				}
+			case "hyperlink":
+				hyperlink := &Hyperlink{}
+				if err = d.DecodeElement(hyperlink, &elem); err != nil {
+					return err
+				}
+				p.Children = append(p.Children, ParagraphChild{Link: hyperlink})
 			default:
 				if err = d.Skip(); err != nil {
 					return err
