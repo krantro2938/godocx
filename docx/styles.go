@@ -32,3 +32,30 @@ func (rd *RootDoc) GetStyleByID(styleID string, styleType stypes.StyleType) *cty
 	}
 	return nil
 }
+
+// GetDefaultStyleByType retrieves the default style for a given style type.
+//
+// Parameters:
+//   - styleType: An stypes.StyleType indicating the type of style (e.g., paragraph, character, table).
+//
+// Returns:
+//   - *ctypes.Style: A pointer to the default style for the given type, if found; otherwise, nil.
+//
+// This method searches through the document's style list to find a style marked
+// as default (w:default="1") for the specified type.
+func (rd *RootDoc) GetDefaultStyleByType(styleType stypes.StyleType) *ctypes.Style {
+	if rd.DocStyles == nil {
+		return nil
+	}
+
+	for _, style := range rd.DocStyles.StyleList {
+		if style.Type == nil || style.Default == nil {
+			continue
+		}
+
+		if *style.Type == styleType && *style.Default == stypes.OnOff("1") {
+			return &style
+		}
+	}
+	return nil
+}
