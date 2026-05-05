@@ -127,6 +127,19 @@ func Unpack(content *[]byte) (*docx.RootDoc, error) {
 			}
 			delete(fileIndex, stylesPath)
 			rd.DocStyles = stylesObj
+		case constants.SourceRelationshipComments:
+			cFileName := relation.Target
+			if cFileName == "" {
+				continue
+			}
+			commentsPath := path.Join(wordDir, cFileName)
+			commentsFile := fileIndex[commentsPath]
+			commentsObj, err := docx.LoadComments(commentsPath, commentsFile)
+			if err != nil {
+				return nil, err
+			}
+			delete(fileIndex, commentsPath)
+			rd.Comments = commentsObj
 		}
 	}
 

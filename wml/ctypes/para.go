@@ -25,8 +25,10 @@ type Paragraph struct {
 }
 
 type ParagraphChild struct {
-	Link *Hyperlink // w:hyperlink
-	Run  *Run       // i.e w:r
+	Link              *Hyperlink // w:hyperlink
+	Run               *Run       // w:r
+	CommentRangeStart *Markup    // w:commentRangeStart
+	CommentRangeEnd   *Markup    // w:commentRangeEnd
 }
 
 type Hyperlink struct {
@@ -136,6 +138,22 @@ func (p Paragraph) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error
 	}
 
 	for _, cElem := range p.Children {
+		if cElem.CommentRangeStart != nil {
+			if err = cElem.CommentRangeStart.MarshalXML(e, xml.StartElement{
+				Name: xml.Name{Local: "w:commentRangeStart"},
+			}); err != nil {
+				return err
+			}
+		}
+
+		if cElem.CommentRangeEnd != nil {
+			if err = cElem.CommentRangeEnd.MarshalXML(e, xml.StartElement{
+				Name: xml.Name{Local: "w:commentRangeEnd"},
+			}); err != nil {
+				return err
+			}
+		}
+
 		if cElem.Run != nil {
 			if err = cElem.Run.MarshalXML(e, xml.StartElement{
 				Name: xml.Name{Local: "w:r"},
@@ -201,6 +219,18 @@ loop:
 					return err
 				}
 				p.Children = append(p.Children, ParagraphChild{Link: hyperlink})
+			case "commentRangeStart":
+				m := &Markup{}
+				if err = d.DecodeElement(m, &elem); err != nil {
+					return err
+				}
+				p.Children = append(p.Children, ParagraphChild{CommentRangeStart: m})
+			case "commentRangeEnd":
+				m := &Markup{}
+				if err = d.DecodeElement(m, &elem); err != nil {
+					return err
+				}
+				p.Children = append(p.Children, ParagraphChild{CommentRangeEnd: m})
 			default:
 				if err = d.Skip(); err != nil {
 					return err

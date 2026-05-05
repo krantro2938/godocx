@@ -121,3 +121,16 @@ func (m Markup) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	start.Attr = append(start.Attr, xml.Attr{Name: xml.Name{Local: "w:id"}, Value: strconv.Itoa(m.ID)})
 	return e.EncodeElement("", start)
 }
+
+func (m *Markup) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		if attr.Name.Local == "id" {
+			id, err := strconv.Atoi(attr.Value)
+			if err != nil {
+				return err
+			}
+			m.ID = id
+		}
+	}
+	return d.Skip()
+}

@@ -85,6 +85,14 @@ func (rd *RootDoc) writeToZip(zw *zip.Writer) error {
 	}
 	snapshot[rd.DocStyles.RelativePath] = docStyleBytes
 
+	if rd.Comments != nil && len(rd.Comments.Comments) > 0 {
+		commentsBytes, err := marshal(rd.Comments)
+		if err != nil {
+			return err
+		}
+		snapshot["word/comments.xml"] = commentsBytes
+	}
+
 	// Persist numbering instances into numbering.xml if any
 	if rd.Numbering != nil {
 		// Apply numbering into a temporary buffer based on either existing or minimal content

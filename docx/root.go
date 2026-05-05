@@ -16,8 +16,9 @@ type RootDoc struct {
 	RootRels    Relationships // RootRels represents relationships at the root level.
 	ContentType ContentTypes
 	Document    *Document      // Document is the main document structure.
-	DocStyles   *ctypes.Styles // Document styles
+	DocStyles   *ctypes.Styles    // Document styles
 	Numbering   *NumberingManager // Numbering manager for list instances
+	Comments    *ctypes.Comments  // Document comments (word/comments.xml)
 
 	rID        int // rId is used to generate unique relationship IDs.
 	ImageCount uint
@@ -63,6 +64,15 @@ func LoadStyles(fileName string, fileBytes []byte) (*ctypes.Styles, error) {
 
 	styles.RelativePath = fileName
 	return &styles, nil
+}
+
+// LoadComments decodes a comments.xml file and returns a Comments instance.
+func LoadComments(fileName string, fileBytes []byte) (*ctypes.Comments, error) {
+	comments := &ctypes.Comments{}
+	if err := xml.Unmarshal(fileBytes, comments); err != nil {
+		return nil, err
+	}
+	return comments, nil
 }
 
 // NewListInstance creates a new numbering instance for the given abstract numbering ID.
