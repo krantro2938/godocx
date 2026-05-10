@@ -5,6 +5,56 @@ import (
 	"github.com/gomutex/godocx/wml/stypes"
 )
 
+// DocDefaults holds the document-level run defaults from w:docDefaults and
+// all named styles defined in the document.
+type DocDefaults struct {
+	// From w:docDefaults/w:rPrDefault/w:rPr/w:rFonts
+	FontFamily         string // @w:ascii
+	FontFamilyHAnsi    string // @w:hAnsi
+	FontFamilyEastAsia string // @w:eastAsia
+	FontFamilyCS       string // @w:cs (complex script)
+
+	// From w:docDefaults/w:rPrDefault/w:rPr/w:sz (half-points; divide by 2 for pt)
+	FontSizeHalfPts uint64
+	// From w:docDefaults/w:rPrDefault/w:rPr/w:szCs
+	FontSizeCSHalfPts uint64
+
+	// All w:style definitions from the document
+	Styles []ctypes.Style
+}
+
+// GetDocumentDefaults returns the document-level defaults extracted from
+// w:docDefaults together with all named styles defined in the document.
+func (rd *RootDoc) GetDocumentDefaults() (DocDefaults, error) {
+	if rd.DocStyles == nil {
+		return DocDefaults{}, nil
+	}
+
+	var result DocDefaults
+
+	if dd := rd.DocStyles.DocDefaults; dd != nil {
+		if dd.RunProp != nil && dd.RunProp.RunProp != nil {
+			rp := dd.RunProp.RunProp
+			if rp.Fonts != nil {
+				result.FontFamily = rp.Fonts.Ascii
+				result.FontFamilyHAnsi = rp.Fonts.HAnsi
+				result.FontFamilyEastAsia = rp.Fonts.EastAsia
+				result.FontFamilyCS = rp.Fonts.CS
+			}
+			if rp.Size != nil {
+				result.FontSizeHalfPts = rp.Size.Value
+			}
+			if rp.SizeCs != nil {
+				result.FontSizeCSHalfPts = rp.SizeCs.Value
+			}
+		}
+	}
+
+	result.Styles = rd.DocStyles.StyleList
+
+	return result, nil
+}
+
 // GetStyleByID retrieves a style from the document styles collection based on the given style ID and type.
 //
 // Parameters:
