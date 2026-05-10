@@ -5,26 +5,32 @@ import (
 	"github.com/gomutex/godocx/wml/stypes"
 )
 
-// DocDefaults holds the document-level run defaults from w:docDefaults and
-// all named styles defined in the document.
+// DocDefaults holds the document-level defaults from w:docDefaults.
 type DocDefaults struct {
-	// From w:docDefaults/w:rPrDefault/w:rPr/w:rFonts
-	FontFamily         string // @w:ascii
-	FontFamilyHAnsi    string // @w:hAnsi
-	FontFamilyEastAsia string // @w:eastAsia
-	FontFamilyCS       string // @w:cs (complex script)
+	// Run defaults (w:rPrDefault/w:rPr)
+	FontASCII    string // w:rFonts @w:ascii
+	FontHAnsi    string // w:rFonts @w:hAnsi
+	FontEastAsia string // w:rFonts @w:eastAsia
+	FontCS       string // w:rFonts @w:cs
+	FontSize     int    // w:sz   — half-points (24 = 12 pt)
+	FontSizeCS   int    // w:szCs — half-points
+	Bold         bool
+	Italic       bool
+	Strike       bool
+	Color        string // hex, e.g. "FF0000" ("auto" → "")
+	Language     string // e.g. "en-US"
 
-	// From w:docDefaults/w:rPrDefault/w:rPr/w:sz (half-points; divide by 2 for pt)
-	FontSizeHalfPts uint64
-	// From w:docDefaults/w:rPrDefault/w:rPr/w:szCs
-	FontSizeCSHalfPts uint64
-
-	// All w:style definitions from the document
-	Styles []ctypes.Style
+	// Paragraph defaults (w:pPrDefault/w:pPr)
+	SpacingBefore   int // twips
+	SpacingAfter    int // twips
+	LineSpacing     int // raw OOXML value (240 = single)
+	IndentLeft      int // twips
+	IndentRight     int // twips
+	IndentFirstLine int // twips
+	IndentHanging   int // twips
 }
 
-// GetDocumentDefaults returns the document-level defaults extracted from
-// w:docDefaults together with all named styles defined in the document.
+// GetDocumentDefaults returns the document-level defaults from w:docDefaults.
 func (rd *RootDoc) GetDocumentDefaults() (DocDefaults, error) {
 	if rd.DocStyles == nil {
 		return DocDefaults{}, nil
@@ -36,36 +42,79 @@ func (rd *RootDoc) GetDocumentDefaults() (DocDefaults, error) {
 		if dd.RunProp != nil && dd.RunProp.RunProp != nil {
 			rp := dd.RunProp.RunProp
 			if rp.Fonts != nil {
-				result.FontFamily = rp.Fonts.Ascii
-				result.FontFamilyHAnsi = rp.Fonts.HAnsi
-				result.FontFamilyEastAsia = rp.Fonts.EastAsia
-				result.FontFamilyCS = rp.Fonts.CS
+				result.FontASCII = rp.Fonts.Ascii
+				result.FontHAnsi = rp.Fonts.HAnsi
+				result.FontEastAsia = rp.Fonts.EastAsia
+				result.FontCS = rp.Fonts.CS
 			}
 			if rp.Size != nil {
-				result.FontSizeHalfPts = rp.Size.Value
+				result.FontSize = int(rp.Size.Value)
 			}
 			if rp.SizeCs != nil {
-				result.FontSizeCSHalfPts = rp.SizeCs.Value
+				result.FontSizeCS = int(rp.SizeCs.Value)
+			}
+			result.Bold = onOffToBool(rp.Bold)
+			result.Italic = onOffToBool(rp.Italic)
+			result.Strike = onOffToBool(rp.Strike)
+			if rp.Color != nil && rp.Color.Val != "auto" {
+				result.Color = rp.Color.Val
+			}
+			if rp.Lang != nil && rp.Lang.Val != nil {
+				result.Language = *rp.Lang.Val
+			}
+		}
+
+		if dd.ParaProp != nil && dd.ParaProp.ParaProp != nil {
+			pp := dd.ParaProp.ParaProp
+			if pp.Spacing != nil {
+				if pp.Spacing.Before != nil {
+					result.SpacingBefore = int(*pp.Spacing.Before)
+				}
+				if pp.Spacing.After != nil {
+					result.SpacingAfter = int(*pp.Spacing.After)
+				}
+				if pp.Spacing.Line != nil {
+					result.LineSpacing = *pp.Spacing.Line
+				}
+			}
+			if pp.Indent != nil {
+				if pp.Indent.Left != nil {
+					result.IndentLeft = *pp.Indent.Left
+				}
+				if pp.Indent.Right != nil {
+					result.IndentRight = *pp.Indent.Right
+				}
+				if pp.Indent.FirstLine != nil {
+					result.IndentFirstLine = int(*pp.Indent.FirstLine)
+				}
+				if pp.Indent.Hanging != nil {
+					result.IndentHanging = int(*pp.Indent.Hanging)
+				}
 			}
 		}
 	}
 
-	result.Styles = rd.DocStyles.StyleList
-
 	return result, nil
 }
 
+// onOffToBool converts a *ctypes.OnOff to bool.
+// Per OOXML spec: element present with no val attribute means true.
+func onOffToBool(o *ctypes.OnOff) bool {
+	if o == nil {
+		return false
+	}
+	if o.Val == nil {
+		return true
+	}
+	switch *o.Val {
+	case stypes.OnOffZero, stypes.OnOffFalse, stypes.OnOffOff:
+		return false
+	default:
+		return true
+	}
+}
+
 // GetStyleByID retrieves a style from the document styles collection based on the given style ID and type.
-//
-// Parameters:
-//   - styleID: A string representing the ID of the style to retrieve.
-//   - styleType: An stypes.StyleType indicating the type of style (e.g., paragraph, character, table).
-//
-// Returns:
-//   - *ctypes.Style: A pointer to the style matching the provided ID and type, if found; otherwise, nil.
-//
-// This method searches through the document's style list to find a style with the specified ID and type.
-// If no matching style is found or if the document styles collection is nil, it returns nil.
 func (rd *RootDoc) GetStyleByID(styleID string, styleType stypes.StyleType) *ctypes.Style {
 	if rd.DocStyles == nil {
 		return nil
@@ -84,15 +133,6 @@ func (rd *RootDoc) GetStyleByID(styleID string, styleType stypes.StyleType) *cty
 }
 
 // GetDefaultStyleByType retrieves the default style for a given style type.
-//
-// Parameters:
-//   - styleType: An stypes.StyleType indicating the type of style (e.g., paragraph, character, table).
-//
-// Returns:
-//   - *ctypes.Style: A pointer to the default style for the given type, if found; otherwise, nil.
-//
-// This method searches through the document's style list to find a style marked
-// as default (w:default="1") for the specified type.
 func (rd *RootDoc) GetDefaultStyleByType(styleType stypes.StyleType) *ctypes.Style {
 	if rd.DocStyles == nil {
 		return nil
